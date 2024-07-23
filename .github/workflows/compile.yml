@@ -25,7 +25,7 @@ jobs:
 
     - name: Install Dependencies
       if: runner.os == 'macOS'
-      run: sudo brew install libftdi libusb-compat pkg-config cmake
+      run: brew install libftdi libusb-compat pkg-config cmake
 
     - name: Checkout
       uses: actions/checkout@v3
