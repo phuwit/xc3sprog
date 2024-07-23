@@ -1,0 +1,161 @@
+name: Compile
+
+on: [push, pull_request]
+
+jobs:
+  build-nix:
+    name: ${{ matrix.platform.name }}-${{ matrix.config.name }}
+    runs-on: ${{ matrix.platform.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+        - { name: Linux GCC,   os: ubuntu-latest }
+        - { name: Linux Clang, os: ubuntu-latest, flags: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ }
+        - { name: macOS,       os: macos-latest  }
+        config:
+        - { name: Dynamic, flags: -DBUILD_SHARED_LIBS=TRUE }
+        - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+
+    steps:
+    - name: Install Dependencies
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install libxrandr-dev libxcursor-dev libudev-dev libopenal-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev
+
+    - name: Install Dependencies
+      if: runner.os == 'macOS'
+      run: sudo brew install libftdi libusb-compat pkg-config cmake
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Get commit hash and time
+      run: echo "HASH_TIME=$(git show -s --format="%h(%cd)" --date=format:"%Y-%m-%d %H.%M.%S %z")" >> "$GITHUB_ENV"
+
+    - name: Configure
+      shell: bash
+      run: mkdir build; cd build; cmake .. ${{matrix.platform.flags}} ${{matrix.config.flags}}
+
+    - name: Build
+      shell: bash
+      run: make ${{matrix.platform.flags}} ${{matrix.config.flags}}
+
+    - name : Upload full build artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.platform.name }}-${{ matrix.config.name }}@${{ env.HASH_TIME }}-full
+        path:  |
+         build/
+         !build/_deps/
+
+    # - name: Upload binary only artifact
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: ${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ env.HASH_TIME }}-binonly
+    #     path: build/bin/
+
+
+  # build-windows-msys2:
+  #   name: ${{ matrix.platform.name }}-${{ matrix.config.name }}
+  #   runs-on: ${{ matrix.platform.os }}
+
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       platform:
+  #       - { name: Windows MSYS2 MinGW64,  os: windows-2022, msys: true  ,flags: -GNinja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ }
+  #       config:
+  #       - { name: Dynamic, flags: -DBUILD_SHARED_LIBS=TRUE }
+  #       - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+
+  #   steps:
+  #   - name: Install MSYS2
+  #     if: ${{ matrix.platform.msys }} == true
+  #     uses: msys2/setup-msys2@v2
+  #     with:
+  #       update: true
+  #       msystem: mingw64
+  #       install: mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake
+
+  #   - name: Checkout
+  #     uses: actions/checkout@v3
+
+  #   - name: Get commit hash and time
+  #     run: echo "HASH_TIME=$(git show -s --format="%h(%cd)" --date=format:"%Y-%m-%d %H.%M.%S %z")" >> $env:GITHUB_ENV
+
+  #   - name: Configure
+  #     shell: msys2 {0}
+  #     run: cmake -S . -B build -DCMAKE_INSTALL_PREFIX=install ${{matrix.platform.flags}} ${{matrix.config.flags}}
+
+  #   - name: Build
+  #     shell: msys2 {0}
+  #     run: cmake --build build --config Release
+
+  #   - name: Install
+  #     shell: msys2 {0}
+  #     run: |
+  #       cmake --install build --config Release
+  #       cp /mingw64/bin/libgcc_s_seh-*.dll build/bin/
+  #       cp /mingw64/bin/libwinpthread-*.dll build/bin/
+  #       cp /mingw64/bin/libstdc++-*.dll build/bin/
+
+  #   - name : Upload full build artifact
+  #     uses: actions/upload-artifact@v3
+  #     with:
+  #       name: ${{ matrix.platform.name }}-${{ matrix.config.name }}@${{ env.HASH_TIME }}-full
+  #       path:  |
+  #         build/
+  #         !build/_deps/
+
+    # - name: Upload binary only artifact
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: ${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ env.HASH_TIME }}-binonly
+    #     path: build/bin/
+
+#  build-windows-msvc:
+#    name: ${{ matrix.platform.name }}-${{ matrix.config.name }}
+#    runs-on: ${{ matrix.platform.os }}
+#    needs: get-commit-hash-time
+#
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        platform:
+#          - { name: Windows VS2019,         os: windows-2019, msys: false }
+#          - { name: Windows VS2022,         os: windows-2022, msys: false }
+#        config:
+#          - { name: Dynamic, flags: -DBUILD_SHARED_LIBS=TRUE }
+#          - { name: Static, flags: -DBUILD_SHARED_LIBS=FALSE }
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#
+#      - name: Get commit hash and time
+#        shell: msys2 {0}
+#        run: echo "HASH_TIME=$(git show -s --format="%h(%cd)" --date=format:"%Y-%m-%d %H.%M.%S %z")" >> $env:GITHUB_ENV
+#
+#      - name: Configure
+#        run: cmake -S . -B build -DCMAKE_INSTALL_PREFIX=install ${{matrix.platform.flags}} ${{matrix.config.flags}}
+#
+#      - name: Build
+#        run: cmake --build build --config Release
+#
+#      - name: Install
+#        run: cmake --install build --config Release
+#
+#      - name : Upload full build artifact
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: ${{ matrix.platform.name }}-${{ matrix.config.name }}@${{ env.HASH_TIME }}-full
+#          path:  |
+#            build/
+#            !build/_deps/
+#
+#    # - name: Upload binary only artifact
+#    #   uses: actions/upload-artifact@v3
+#    #   with:
+#    #     name: ${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ env.HASH_TIME }}-binonly
+#    #     path: build/bin/
